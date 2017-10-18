@@ -40,7 +40,10 @@ def run_training(param,data):
 	                		mean_rank_h.append(mr)
 	                		relation_specific_eval[i][cla][0] = mr
 	                		break
-	            		mr += 1
+	                	if val == 0:
+	                		continue
+	                	else:
+	            			mr += 1
 	        	mr = 0
 	        	for val in tail_pred[i]:
 	            		if val == t:
@@ -48,6 +51,10 @@ def run_training(param,data):
 	                		relation_specific_eval[i][cla][1] = mr
 	                		break	
 	            		mr += 1
+	            		if val == 0:
+	                		continue
+	                	else:
+	            			mr += 1
 	        	# filtered mean rank
 	        	fmr = 0
 	        	for val in head_pred[i]:
@@ -55,7 +62,7 @@ def run_training(param,data):
 	                		filtered_mean_rank_h.append(fmr)
 	                		relation_specific_eval[i][cla][2] = fmr
 	                		break
-	            		if t in tr_h and r in tr_h[t] and val in tr_h[t][r]:
+	            		if (t in tr_h and r in tr_h[t] and val in tr_h[t][r]) or val == 0:
 	                		continue
 	            		else:
 	                		fmr += 1
@@ -66,7 +73,7 @@ def run_training(param,data):
 	                		filtered_mean_rank_t.append(fmr)
 	                		relation_specific_eval[i][cla][3] = fmr
 	                		break
-	            		if h in hr_t and r in hr_t[h] and val in hr_t[h][r]:
+	            		if (h in hr_t and r in hr_t[h] and val in hr_t[h][r]) or val == 0:
 	                		continue
 	            		else:
 	                		fmr += 1
@@ -90,7 +97,6 @@ def run_training(param,data):
 
 	def evaluate(model, valid_data, epoch, test_type):
 		relation_specific_eval_full = np.expand_dims(np.full(shape=(4,4), fill_value = -1),0)
-		print relation_specific_eval_full.shape
 		accu_mean_rank_h = list()
                 accu_mean_rank_t = list()
                 accu_filtered_mean_rank_h = list()
@@ -128,25 +134,25 @@ def run_training(param,data):
 		type_ids, entity_type_ids, entity_ids, loss_weights = data.get_batch_data(train_batch_type)
 
 		feed_dict = {model.types:type_ids, model.entities_types: entity_type_ids, model.loss_weights:loss_weights, model.entities:entity_ids , model.pos_h: train_batch_rel[0],model.pos_r: train_batch_rel[1],model.pos_t: train_batch_rel[2],model.neg_h: train_batch_rel[3],model.neg_r: train_batch_rel[4],model.neg_t: train_batch_rel[5]}
-		loss_type, _, _, _ = sess.run([losses, train_op, model.pr, gradients], feed_dict=feed_dict)
+		loss_type, _, _= sess.run([losses, train_op, model.pr], feed_dict=feed_dict)
 		loss_type = np.sum(np.array(loss_type))
 		#print train_batch_loss_entity
 		#sum_loss = np.sum(loss)
-		if step % show_grad_freq == 0:
-			print "Showing gradient"
-	                grad_vals = sess.run(gradients, feed_dict= feed_dict)
-        	        var_to_grad = {}
-        	        #print grad_vals
-        	        #print gradients
-                	for grad_val, var in zip(grad_vals, gradients):
-                		#print type(grad_val).__module__
-                        	#if type(grad_val).__module__ == np.__name__:
-                                var_to_grad[var.name] = grad_val
-	                        #sys.stdout.flush()
-        	                print 'var.name ', var.name, 'shape(grad) ', 'mean(grad) ',np.mean(grad_val[0])
-        	                print grad_val
-        	                #print 'var.name ', var.name, 'shape(grad) ',grad_val[0],
-                	        sys.stdout.flush()
+		# if step % show_grad_freq == 0:
+		# 	print "Showing gradient"
+	 #                grad_vals = sess.run(gradients, feed_dict= feed_dict)
+  #       	        var_to_grad = {}
+  #       	        #print grad_vals
+  #       	        #print gradients
+  #               	for grad_val, var in zip(grad_vals, gradients):
+  #               		#print type(grad_val).__module__
+  #                       	#if type(grad_val).__module__ == np.__name__:
+  #                               var_to_grad[var.name] = grad_val
+	 #                        #sys.stdout.flush()
+  #       	                print 'var.name ', var.name, 'shape(grad) ', 'mean(grad) ',np.mean(grad_val[0])
+  #       	                print grad_val
+  #       	                #print 'var.name ', var.name, 'shape(grad) ',grad_val[0],
+  #               	        sys.stdout.flush()
 		return loss_type
 
 	def get_type_data():
@@ -164,9 +170,11 @@ def run_training(param,data):
 		model = TypeSubspace(param)
 		model.create_placeholder()
 		losses = model.loss()
-		train_op, gradients = model.train(losses)
-		#train_op = model.train(losses)
+		#print losses
 		model_pred_h, model_pred_t = model.inference()
+		#train_op, gradients = model.train(losses)
+		train_op = model.train(losses)
+		
 		print 'model created'
 		sys.stdout.flush()
 		saver = tf.train.Saver()
@@ -197,10 +205,12 @@ def run_training(param,data):
 		sys.stdout.flush()
 		overall_step_count = 0
 		last_overall_avg_train_loss = float("inf")
-		#ent_embeddings = np.loadtxt(param['model_path'] + 'ent_embedding')
-		#rel_embeddings = np.loadtxt(param['model_path'] + 'rel_embedding')
-		#sess.run(model.ent_embedding.assign(ent_embeddings))
-		#sess.run(model.rel_embedding.assign(rel_embeddings))
+		ent_embeddings = np.loadtxt(param['model_path'] + 'ent_embedding')
+		rel_embeddings = np.loadtxt(param['model_path'] + 'rel_embedding')
+		#type_embeddings = np.load(param['model_path'] + '/type_embedding.npy')
+		sess.run(model.ent_embedding.assign(ent_embeddings))
+		sess.run(model.rel_embedding.assign(rel_embeddings))
+		#sess.run(model.type_embedding.assign(type_embeddings))del.rel_embedding.assign(rel_embeddings))
 
 		#evaluate(model, valid_data, param['batch_size'], type_vocab, 0, 0,ancestors)
 		for epoch in range(param['max_epochs']):
@@ -236,13 +246,12 @@ def run_training(param,data):
 			overall_avg_train_loss = train_loss/float(nbatches_count)
 			#print 'Validation started'
 			if (epoch > 0 and epoch %10 == 0):
-			#if (epoch >= 0):
-				final_type_embedding = model.type_embedding.eval(session=sess)
+				#final_type_embedding = model.type_embedding.eval(session=sess)
 				final_ent_embedding = model.ent_embedding.eval(session=sess)
 				final_rel_embedding = model.rel_embedding.eval(session=sess)
-				# np.save(param['model_path'] + 'type_embedding',final_type_embedding)
-				# np.savetxt(param['model_path'] + 'ent_embedding',final_ent_embedding)
-				# np.savetxt(param['model_path'] + 'rel_embedding',final_rel_embedding)
+				#np.save( './model_3/type_embedding',final_type_embedding)
+				np.savetxt('./model_3/ent_embedding',final_ent_embedding)
+				np.savetxt( './model_3/rel_embedding',final_rel_embedding)
 				evaluate(model, validation_data_rel, epoch, "valid")
 				#evaluate(model, testing_data_rel, epoch, "test")
 				#saver.save(sess, model_file,global_step=epoch)
